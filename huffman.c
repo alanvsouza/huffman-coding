@@ -47,15 +47,15 @@ unsigned char* encode(char* charset, size_t* encoded_data_size) {
     size_t tree_size_in_bytes = (tree_size_in_bits / 8U) + 1;
     size_t data_size_in_bytes = (data_size_in_bits / 8U) + 1;
 
-    size_t total_byte_size = tree_size_in_bytes + data_size_in_bytes + 2 * sizeof(uint64_t); // needs to allocate space to the sizes of the tree and the data (in bits)
+    size_t total_byte_size = tree_size_in_bytes + data_size_in_bytes + sizeof(uint32_t) + sizeof(uint64_t); // needs to allocate space to the sizes of the tree and the data (in bits)
 
     unsigned char* result_buffer = (unsigned char*)malloc(sizeof(unsigned char) * total_byte_size);
 
     unsigned char* curr_byte_ptr = result_buffer;
 
-    uint64_t tree_size_u64 = (uint64_t)tree_size_in_bits;
-    memcpy(curr_byte_ptr, &tree_size_u64, sizeof(uint64_t));
-    curr_byte_ptr += sizeof(uint64_t);
+    uint32_t tree_size_u32 = (uint32_t)tree_size_in_bits;
+    memcpy(curr_byte_ptr, &tree_size_u32, sizeof(uint32_t));
+    curr_byte_ptr += sizeof(uint32_t);
     memcpy(curr_byte_ptr, encoded_tree, tree_size_in_bytes);
     curr_byte_ptr += tree_size_in_bytes;
     
@@ -77,9 +77,9 @@ unsigned char* encode(char* charset, size_t* encoded_data_size) {
 char* decode(unsigned char* encoded, size_t encoded_size) {
     unsigned char* curr_byte_ptr = encoded;
 
-    uint64_t tree_size_in_bits = 0;
-    memcpy(&tree_size_in_bits, curr_byte_ptr, sizeof(uint64_t));
-    curr_byte_ptr += sizeof(uint64_t);
+    uint32_t tree_size_in_bits = 0;
+    memcpy(&tree_size_in_bits, curr_byte_ptr, sizeof(uint32_t));
+    curr_byte_ptr += sizeof(uint32_t);
 
     size_t tree_size_in_bytes = (tree_size_in_bits / 8U) + 1;
     unsigned char* encoded_tree = (unsigned char*)malloc(sizeof(unsigned char) * tree_size_in_bytes);

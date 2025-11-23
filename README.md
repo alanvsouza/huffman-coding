@@ -37,14 +37,14 @@ The encoder writes a compact binary file that contains both a serialized represe
 
 Layout (in order):
 
-1. 4 bytes: tree_size_in_bits (unsigned int, number of bits used to represent the serialized tree)
+1. 4 bytes: tree_size_in_bits (uint32_t, number of bits used to represent the serialized tree)
 2. tree_size_in_bytes bytes: serialized tree bytes (see below; the exact byte count is computed as (tree_size_in_bits/8) + 1 in the implementation)
-3. 4 bytes: data_size_in_bits (unsigned int, number of bits in the encoded payload)
+3. 8 bytes: data_size_in_bits (uint64_t, number of bits in the encoded payload)
 4. data_size_in_bytes bytes: encoded data bytes (computed as (data_size_in_bits/8) + 1 in the implementation)
 
 Notes about sizes and byte counts:
 - Sizes are stored in bits so the decoder knows the exact number of meaningful bits in the last byte. The implementation uses an allocation-rule of (bits/8) + 1 to ensure enough bytes to hold all bits; this means the final byte may be only partially filled.
-- The implementation stores the two bit-length headers as `unsigned int` in the platform's native endianness (on typical x86/x86_64 Linux systems this is little-endian). If you move encoded files between platforms with different endianness, you'll need to convert these headers accordingly.
+- The implementation stores the bit-length headers in the platform's native endianness (on typical x86/x86_64 Linux systems this is little-endian). If you move encoded files between platforms with different endianness, you'll need to convert these headers accordingly.
 
 Serialized Huffman tree format
 -----------------------------
@@ -86,7 +86,7 @@ Design decisions and trade-offs
     - The bitstream writes single bits using `write_bit()` loops for bytes; this is conceptually simple.
 
 - Portability considerations
-  - The code uses `unsigned int` for bit-length headers and writes them directly via `memcpy`. This is simple and fast but assumes the reader and writer share endianness and `unsigned int` width. If you need portable on-disk format, change the headers to a fixed endianness/size (for example, store as 32-bit little-endian using integer conversion helpers).
+  - The code uses `uint32_t` and `uint64_t` for bit-length headers and writes them directly via `memcpy`. This is simple and fast but assumes the reader and writer share endianness. If you need portable on-disk format, change the headers to a fixed endianness (for example, store as little-endian using integer conversion helpers).
 
 - Memory ownership and leaks
   - The implementation includes routines to free temporary allocations (the Huffman tree and lookup table) once they are no longer needed so a single encode/decode cycle does not leak significant memory. However, there are still places where error handling paths could be improved (e.g., failing `malloc` in the middle of building structures).
@@ -108,7 +108,7 @@ Edge cases & limitations
   - `decode()` returns a null-terminated `char*` that must be freed by the caller.
 
 - Endianness & portability
-  - The on-disk headers are written using native `unsigned int` layout. For cross-platform portability, change to a fixed layout (e.g., 32-bit little-endian) and document that.
+  - The on-disk headers are written using native layout. For cross-platform portability, change to a fixed layout (e.g., little-endian) and document that.
 
 Potential improvements
 ----------------------
