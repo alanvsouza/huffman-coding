@@ -37,10 +37,10 @@ void write_byte(BitStream* stream, unsigned char byte) {
 
 // writes the entire byte buffer to the data array
 void flush(BitStream* stream) {
-    unsigned int byte_index = stream->total_length / 8U;
+    size_t byte_index = stream->total_length / 8U;
 
     if (byte_index >= stream->alloced_space) {
-        unsigned int new_space = stream->alloced_space * 2;
+        size_t new_space = stream->alloced_space * 2;
         unsigned char* new_ptr = (unsigned char*)realloc(stream->data, new_space * sizeof *stream->data);
 
         if (new_ptr) {
@@ -59,7 +59,7 @@ void flush(BitStream* stream) {
 }
 
 // return the data stored in the stream, while freeing the memory allocated (the stream cannot be used after this)
-unsigned char* get_stream_data(BitStream* stream, unsigned int* length_in_bits) {
+unsigned char* get_stream_data(BitStream* stream, size_t* length_in_bits) {
     flush(stream);
 
     unsigned char* data = stream->data;

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 #include "stream.h"
 #include "huffman_tree.h"
@@ -15,21 +16,21 @@ typedef struct {
 } HuffmanCode;
 
 static HuffmanCode** build_lookup_table(HuffmanTreeNode* root);
-static unsigned char* encode_huffman_tree(HuffmanTreeNode* root, unsigned int* tree_size_in_bytes);
-static HuffmanTreeNode* decode_huffman_tree(unsigned char* encoded_tree, unsigned int* curr_bit, unsigned int tree_size_in_bytes);
-static void decode_data(HuffmanTreeNode* root, BitStream* stream, unsigned char* encoded_data, unsigned int *curr_bit, unsigned int total_bits);
+static unsigned char* encode_huffman_tree(HuffmanTreeNode* root, size_t* tree_size_in_bytes);
+static HuffmanTreeNode* decode_huffman_tree(unsigned char* encoded_tree, size_t* curr_bit, size_t tree_size_in_bytes);
+static void decode_data(HuffmanTreeNode* root, BitStream* stream, unsigned char* encoded_data, size_t *curr_bit, size_t total_bits);
 
 static void free_huffman_tree(HuffmanTreeNode* root);
 static void free_lookup_table(HuffmanCode** lookup_table);
 
-unsigned char* encode(char* charset, unsigned int* encoded_data_size) {
+unsigned char* encode(char* charset, size_t* encoded_data_size) {
     BitStream* data_stream = create_stream();
     
     HuffmanTreeNode* root = build_huffman_tree(charset);
     HuffmanCode** lookup_table = build_lookup_table(root);
 
-    int charset_len = strlen(charset);
-    for (int i=0; i<charset_len; i++) {
+    size_t charset_len = strlen(charset);
+    for (size_t i=0; i<charset_len; i++) {
         HuffmanCode* curr_code = lookup_table[(unsigned char)charset[i]];
 
         for (int j=0; j<curr_code->bit_count; j++) {
@@ -37,27 +38,30 @@ unsigned char* encode(char* charset, unsigned int* encoded_data_size) {
         }
     }
 
-    unsigned int data_size_in_bits = 0;
+    size_t data_size_in_bits = 0;
     unsigned char* encoded_data = get_stream_data(data_stream, &data_size_in_bits);
 
-    unsigned int tree_size_in_bits;
+    size_t tree_size_in_bits;
     unsigned char* encoded_tree = encode_huffman_tree(root, &tree_size_in_bits);
 
-    unsigned int tree_size_in_bytes = (tree_size_in_bits / 8U) + 1;
-    unsigned int data_size_in_bytes = (data_size_in_bits / 8U) + 1;
+    size_t tree_size_in_bytes = (tree_size_in_bits / 8U) + 1;
+    size_t data_size_in_bytes = (data_size_in_bits / 8U) + 1;
 
-    unsigned int total_byte_size = tree_size_in_bytes + data_size_in_bytes + 2 * sizeof(unsigned int); // needs to allocate space to the sizes of the tree and the data (in bits)
+    size_t total_byte_size = tree_size_in_bytes + data_size_in_bytes + 2 * sizeof(uint64_t); // needs to allocate space to the sizes of the tree and the data (in bits)
 
     unsigned char* result_buffer = (unsigned char*)malloc(sizeof(unsigned char) * total_byte_size);
 
     unsigned char* curr_byte_ptr = result_buffer;
 
-    memcpy(curr_byte_ptr, &tree_size_in_bits, sizeof(unsigned int));
-    curr_byte_ptr += sizeof(unsigned int);
+    uint64_t tree_size_u64 = (uint64_t)tree_size_in_bits;
+    memcpy(curr_byte_ptr, &tree_size_u64, sizeof(uint64_t));
+    curr_byte_ptr += sizeof(uint64_t);
     memcpy(curr_byte_ptr, encoded_tree, tree_size_in_bytes);
     curr_byte_ptr += tree_size_in_bytes;
-    memcpy(curr_byte_ptr, &data_size_in_bits, sizeof(unsigned int));
-    curr_byte_ptr += sizeof(unsigned int);
+    
+    uint64_t data_size_u64 = (uint64_t)data_size_in_bits;
+    memcpy(curr_byte_ptr, &data_size_u64, sizeof(uint64_t));
+    curr_byte_ptr += sizeof(uint64_t);
     memcpy(curr_byte_ptr, encoded_data, data_size_in_bytes);
 
     *encoded_data_size = total_byte_size;
@@ -70,39 +74,47 @@ unsigned char* encode(char* charset, unsigned int* encoded_data_size) {
     return result_buffer;
 }
 
-char* decode(unsigned char* encoded, unsigned int encoded_size) {
+char* decode(unsigned char* encoded, size_t encoded_size) {
     unsigned char* curr_byte_ptr = encoded;
 
-    unsigned int tree_size_in_bits = 0;
-    memcpy(&tree_size_in_bits, curr_byte_ptr, sizeof(unsigned int));
-    curr_byte_ptr += sizeof(unsigned int);
+    uint64_t tree_size_in_bits = 0;
+    memcpy(&tree_size_in_bits, curr_byte_ptr, sizeof(uint64_t));
+    curr_byte_ptr += sizeof(uint64_t);
 
-    unsigned int tree_size_in_bytes = (tree_size_in_bits / 8U) + 1;
+    size_t tree_size_in_bytes = (tree_size_in_bits / 8U) + 1;
     unsigned char* encoded_tree = (unsigned char*)malloc(sizeof(unsigned char) * tree_size_in_bytes);
     memcpy(encoded_tree, curr_byte_ptr, tree_size_in_bytes);
     curr_byte_ptr += tree_size_in_bytes;
 
-    unsigned int data_size_in_bits = 0;
-    memcpy(&data_size_in_bits, curr_byte_ptr, sizeof(unsigned int));
-    curr_byte_ptr += sizeof(unsigned int);
+    uint64_t data_size_in_bits = 0;
+    memcpy(&data_size_in_bits, curr_byte_ptr, sizeof(uint64_t));
+    curr_byte_ptr += sizeof(uint64_t);
 
-    unsigned int data_size_in_bytes = (data_size_in_bits / 8U) + 1;
-    unsigned char* encoded_data = (unsigned char*)malloc(sizeof(unsigned char) * data_size_in_bits);
+    size_t data_size_in_bytes = (data_size_in_bits / 8U) + 1;
+    unsigned char* encoded_data = (unsigned char*)malloc(sizeof(unsigned char) * data_size_in_bytes);
     memcpy(encoded_data, curr_byte_ptr, data_size_in_bytes);
 
-    unsigned int curr_bit = 0;
-    HuffmanTreeNode* root = decode_huffman_tree(encoded_tree, &curr_bit, tree_size_in_bits);
+    size_t curr_bit = 0;
+    HuffmanTreeNode* root = decode_huffman_tree(encoded_tree, &curr_bit, (size_t)tree_size_in_bits);
+
+    if (!root) {
+        if (encoded_tree) free(encoded_tree);
+        if (encoded_data) free(encoded_data);
+        return NULL;
+    }
 
     BitStream* stream = create_stream();
     curr_bit = 0;
-    decode_data(root, stream, encoded_data, &curr_bit, data_size_in_bits);
+    decode_data(root, stream, encoded_data, &curr_bit, (size_t)data_size_in_bits);
 
-    unsigned int total_size = 0;
-    unsigned char* decoded_data = get_stream_data(stream, &total_size);
+    size_t total_size_in_bits = 0;
+    unsigned char* decoded_data = get_stream_data(stream, &total_size_in_bits);
 
-    char* str = (char*)malloc((sizeof(char) * total_size) + 1);
-    int i;
-    for (i=0; i<total_size; i++) {
+    size_t total_size_in_bytes = (total_size_in_bits / 8U) + (total_size_in_bits % 8U != 0 ? 1 : 0);
+    
+    char* str = (char*)malloc((sizeof(char) * total_size_in_bytes) + 1);
+    size_t i;
+    for (i=0; i<total_size_in_bytes; i++) {
         str[i] = (char)decoded_data[i];
     }
     str[i] = '\0';
@@ -164,8 +176,10 @@ static void encode_huffman_tree_recursion(
     }
 }
 
-static unsigned int read_bit(unsigned char* bytes, unsigned int bit_index) {
-    unsigned int byte_index = bit_index / 8U;
+static unsigned int read_bit(unsigned char* bytes, size_t bit_index, size_t max_bits) {
+    if (bit_index >= max_bits) return 0;
+    
+    size_t byte_index = bit_index / 8U;
     unsigned char byte = bytes[byte_index];
 
     unsigned char mask = 1 << (7 - (bit_index - 8U * byte_index));
@@ -173,26 +187,26 @@ static unsigned int read_bit(unsigned char* bytes, unsigned int bit_index) {
     return (byte & mask) != 0;
 }
 
-static unsigned int read_byte(unsigned char* bytes, unsigned int bit_index) {
+static unsigned int read_byte(unsigned char* bytes, size_t bit_index, size_t max_bits) {
     unsigned char out_byte = 0;
     for (int i=0; i<8; i++) {
-        unsigned int bit = read_bit(bytes, bit_index + i);
+        unsigned int bit = read_bit(bytes, bit_index + i, max_bits);
         out_byte |= bit << (7 - i);
     }
     return out_byte;
 }
 
-static unsigned char* encode_huffman_tree(HuffmanTreeNode* root, unsigned int* tree_size_in_bytes) {
+static unsigned char* encode_huffman_tree(HuffmanTreeNode* root, size_t* tree_size_in_bytes) {
     BitStream* huffman_tree_stream = create_stream();
     encode_huffman_tree_recursion(root, huffman_tree_stream);
 
     return get_stream_data(huffman_tree_stream, tree_size_in_bytes);
 }
 
-static HuffmanTreeNode* decode_huffman_tree(unsigned char* encoded_tree, unsigned int* curr_bit, unsigned int tree_size_in_bits) {
+static HuffmanTreeNode* decode_huffman_tree(unsigned char* encoded_tree, size_t* curr_bit, size_t tree_size_in_bits) {
     if (*curr_bit >= tree_size_in_bits) return NULL;
     
-    unsigned int bit = read_bit(encoded_tree, *curr_bit);
+    unsigned int bit = read_bit(encoded_tree, *curr_bit, tree_size_in_bits);
     (*curr_bit) += 1;
 
     if (bit == 0) {
@@ -203,18 +217,25 @@ static HuffmanTreeNode* decode_huffman_tree(unsigned char* encoded_tree, unsigne
         return internal_node;
     }
 
-    char c = read_byte(encoded_tree, *curr_bit);
+    char c = read_byte(encoded_tree, *curr_bit, tree_size_in_bits);
     (*curr_bit) += 8;
     HuffmanTreeNode* leaf = new_tree_leaf(c, 0);
     return leaf;
 }
 
-static void decode_data(HuffmanTreeNode* root, BitStream* stream, unsigned char* encoded_data, unsigned int *curr_bit, unsigned int total_bits) {
+static void decode_data(HuffmanTreeNode* root, BitStream* stream, unsigned char* encoded_data, size_t *curr_bit, size_t total_bits) {
+    if (!root) return;
+    
     HuffmanTreeNode* traverse = root;
 
     while (*curr_bit < total_bits) {
-        unsigned int bit = read_bit(encoded_data, (*curr_bit)++);
+        unsigned int bit = read_bit(encoded_data, (*curr_bit)++, total_bits);
         traverse = bit ? traverse->right : traverse->left;
+
+        if (!traverse) {
+            // Malformed tree or data
+            return;
+        }
 
         if (!traverse->is_internal_node) {
             write_byte(stream, (unsigned char)traverse->c);

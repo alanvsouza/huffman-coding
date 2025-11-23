@@ -70,10 +70,10 @@ static HuffmanTreeNode** build_frequencies(char* charset, unsigned int* unique_c
     unsigned int* frequencies = (unsigned int*)malloc(sizeof(unsigned int) * _8_BIT_ASCII_SIZE);
     for (int i=0; i<_8_BIT_ASCII_SIZE; i++) frequencies[i] = 0;
 
-    int charset_len = strlen(charset);
+    size_t charset_len = strlen(charset);
     
     int unique = 0;
-    for (int i=0; i<charset_len; i++) {
+    for (size_t i=0; i<charset_len; i++) {
         unsigned char uc = (unsigned char)charset[i];
         if ((++frequencies[uc]) == 1) unique++;
     }

@@ -71,7 +71,7 @@ int main(int argc, char** argv) {
             return 2;
         }
 
-        unsigned int out_size = 0;
+        size_t out_size = 0;
         unsigned char* outbuf = encode((char*)inbuf, &out_size);
         free(inbuf);
         if (!outbuf) {
@@ -89,12 +89,12 @@ int main(int argc, char** argv) {
             double ratio = (double)out_size / (double)in_size;
             double saved = (1.0 - ratio) * 100.0;
             if (saved >= 0.0) {
-                printf("Encoded %s -> %s (%u bytes). Saved: %.2f%%\n", inpath, outpath, out_size, saved);
+                printf("Encoded %s -> %s (%zu bytes). Saved: %.2f%%\n", inpath, outpath, out_size, saved);
             } else {
-                printf("Encoded %s -> %s (%u bytes). Overhead: %.2f%%\n", inpath, outpath, out_size, -saved);
+                printf("Encoded %s -> %s (%zu bytes). Overhead: %.2f%%\n", inpath, outpath, out_size, -saved);
             }
         } else {
-            printf("Encoded %s -> %s (%u bytes)\n", inpath, outpath, out_size);
+            printf("Encoded %s -> %s (%zu bytes)\n", inpath, outpath, out_size);
         }
         return 0;
 
@@ -106,8 +106,8 @@ int main(int argc, char** argv) {
             return 2;
         }
 
-        unsigned int out_size = 0;
-        char* outbuf = decode(inbuf, (unsigned int)in_size);
+        size_t out_size = 0;
+        char* outbuf = decode(inbuf, in_size);
         free(inbuf);
         if (!outbuf) {
             fprintf(stderr, "Decoding failed\n");
